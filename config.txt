@@ -1,0 +1,12 @@
+{
+  "shortcuts": {
+    "email": "Ctrl+1",
+    "cpf": "Ctrl+Shift+C",
+    "cep": "Ctrl+Shift+Z"
+  },
+  "api": {
+    "rapidapi_key": "",
+    "rapidapi_host": "temp-mail.p.rapidapi.com"
+  },
+  "app_version": "1.0.0"
+}

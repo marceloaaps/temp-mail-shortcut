@@ -1,0 +1,99 @@
+"""
+Repositório de configuração - Implementa IConfigRepository.
+Adaptação do código original config_manager.py
+"""
+import os
+import json
+from pathlib import Path
+from typing import Dict, Any, Optional
+from ...domain.interfaces.repositories import IConfigRepository
+
+
+class FileConfigRepository(IConfigRepository):
+    """Gerencia configurações em arquivo JSON."""
+    
+    def __init__(self, config_path: str = None):
+        """
+        Inicializa o repositório de configuração.
+        
+        Args:
+            config_path: Caminho para a pasta de configuração
+        """
+        if config_path is None:
+            self.config_dir = (
+                Path.home() / "AppData" / "Local" / "TempMailShortcut"
+                if os.name == 'nt'
+                else Path.home() / ".tempmail-shortcut"
+            )
+        else:
+            self.config_dir = Path(config_path)
+        
+        self.config_dir.mkdir(parents=True, exist_ok=True)
+        self.config_file = self.config_dir / "config.txt"
+        
+        self.default_config = {
+            "shortcuts": {
+                "email": "Ctrl+Shift+E",
+                "cpf": "Ctrl+Shift+C",
+                "cep": "Ctrl+Shift+Z"
+            },
+            "api": {
+                "rapidapi_key": "",
+                "rapidapi_host": "temp-mail.p.rapidapi.com"
+            }
+        }
+        
+        self._config = self._load()
+    
+    def _load(self) -> Dict[str, Any]:
+        """Carrega configuração do arquivo."""
+        if not self.config_file.exists():
+            self._save(self.default_config)
+            return self.default_config
+        
+        try:
+            with open(self.config_file, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+                if not content:
+                    return self.default_config
+                return json.loads(content)
+        except (json.JSONDecodeError, IOError):
+            return self.default_config
+    
+    def _save(self, config: Dict[str, Any]) -> None:
+        """Salva configuração no arquivo."""
+        try:
+            with open(self.config_file, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
+        except IOError:
+            pass
+    
+    def get(self, key: str, default: Any = None) -> Any:
+        """Obtém um valor (suporta chaves aninhadas com ponto)."""
+        keys = key.split('.')
+        value = self._config
+        
+        for k in keys:
+            if isinstance(value, dict):
+                value = value.get(k)
+            else:
+                return default
+        
+        return value if value is not None else default
+    
+    def set(self, key: str, value: Any) -> None:
+        """Define um valor (suporta chaves aninhadas com ponto)."""
+        keys = key.split('.')
+        config = self._config
+        
+        for k in keys[:-1]:
+            if k not in config:
+                config[k] = {}
+            config = config[k]
+        
+        config[keys[-1]] = value
+        self._save(self._config)
+    
+    def get_all(self) -> Dict[str, Any]:
+        """Obtém todas as configurações."""
+        return self._config.copy()
