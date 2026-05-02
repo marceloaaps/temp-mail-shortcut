@@ -25,7 +25,7 @@ def build_exe():
         "--name=TempMailShortcut",
         "--add-data=src:src",  # Inclui pasta src
         "--distpath=dist",
-        "--buildpath=build",
+        "--workpath build",
         "--specpath=.",
         str(project_dir / "main.py")
     ]
