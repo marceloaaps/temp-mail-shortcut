@@ -28,46 +28,118 @@ class ShortcutManager:
         shortcuts_config = self.config_manager.config.get("shortcuts", {})
         
         def on_email():
-            from .application.use_cases.generate_data import GenerateEmailUseCase
-            use_case = GenerateEmailUseCase(
-                self.data_generator,
-                Container.get_clipboard_service(),
-                self.logger
-            )
-            result = use_case.execute()
-            if self.callback_handler:
-                self.callback_handler("email", {"email": result.value, "error": result.error})
+            try:
+                print("[CALLBACK] on_email() disparado!")
+                from .application.use_cases.generate_data import GenerateEmailUseCase
+                use_case = GenerateEmailUseCase(
+                    self.data_generator,
+                    Container.get_clipboard_service(),
+                    self.logger
+                )
+                print("[CALLBACK] Executando GenerateEmailUseCase...")
+                result = use_case.execute()
+                print(f"[CALLBACK] Email gerado: {result.value}, Erro: {result.error}")
+                if self.callback_handler:
+                    print("[CALLBACK] Chamando callback_handler para email...")
+                    self.callback_handler("email", {"email": result.value, "error": result.error})
+                    print("[CALLBACK] callback_handler para email chamado com sucesso!")
+                else:
+                    print("[CALLBACK] Nenhum callback_handler definido para email!")
+            except Exception as e:
+                print(f"[CALLBACK] Exceção em on_email: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                self.logger.error(f"Erro ao gerar email: {str(e)}")
+                if self.callback_handler:
+                    self.callback_handler("email", {"email": None, "error": str(e)})
         
         def on_cpf():
-            from .application.use_cases.generate_data import GenerateCPFUseCase
-            use_case = GenerateCPFUseCase(
-                self.data_generator,
-                Container.get_clipboard_service(),
-                self.logger
-            )
-            result = use_case.execute()
-            if self.callback_handler:
-                self.callback_handler("cpf", {"cpf": result.value, "error": result.error})
+            try:
+                print("[CALLBACK] on_cpf() disparado!")
+                from .application.use_cases.generate_data import GenerateCPFUseCase
+                use_case = GenerateCPFUseCase(
+                    self.data_generator,
+                    Container.get_clipboard_service(),
+                    self.logger
+                )
+                print("[CALLBACK] Executando GenerateCPFUseCase...")
+                result = use_case.execute()
+                print(f"[CALLBACK] CPF gerado: {result.value}, Erro: {result.error}")
+                if self.callback_handler:
+                    print("[CALLBACK] Chamando callback_handler...")
+                    self.callback_handler("cpf", {"cpf": result.value, "error": result.error})
+                    print("[CALLBACK] callback_handler chamado com sucesso!")
+                else:
+                    print("[CALLBACK] Nenhum callback_handler definido!")
+            except Exception as e:
+                print(f"[CALLBACK] Exceção em on_cpf: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                self.logger.error(f"Erro ao gerar CPF: {str(e)}")
+                if self.callback_handler:
+                    self.callback_handler("cpf", {"cpf": None, "error": str(e)})
         
         def on_cep():
-            from .application.use_cases.generate_data import GenerateCEPUseCase
-            use_case = GenerateCEPUseCase(
-                self.data_generator,
-                Container.get_clipboard_service(),
-                self.logger
-            )
-            result = use_case.execute()
-            if self.callback_handler:
-                self.callback_handler("cep", {"cep": result.value, "error": result.error})
+            try:
+                print("[CALLBACK] on_cep() disparado!")
+                from .application.use_cases.generate_data import GenerateCEPUseCase
+                use_case = GenerateCEPUseCase(
+                    self.data_generator,
+                    Container.get_clipboard_service(),
+                    self.logger
+                )
+                print("[CALLBACK] Executando GenerateCEPUseCase...")
+                result = use_case.execute()
+                print(f"[CALLBACK] CEP gerado: {result.value}, Erro: {result.error}")
+                if self.callback_handler:
+                    print("[CALLBACK] Chamando callback_handler para CEP...")
+                    self.callback_handler("cep", {"cep": result.value, "error": result.error})
+                    print("[CALLBACK] callback_handler para CEP chamado com sucesso!")
+                else:
+                    print("[CALLBACK] Nenhum callback_handler definido para CEP!")
+            except Exception as e:
+                print(f"[CALLBACK] Exceção em on_cep: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                self.logger.error(f"Erro ao gerar CEP: {str(e)}")
+                if self.callback_handler:
+                    self.callback_handler("cep", {"cep": None, "error": str(e)})
         
         try:
-            self.shortcut_service.register(shortcuts_config.get("email", "ctrl+shift+e"), on_email)
-            self.shortcut_service.register(shortcuts_config.get("cpf", "ctrl+shift+c"), on_cpf)
-            self.shortcut_service.register(shortcuts_config.get("cep", "ctrl+shift+z"), on_cep)
+            # Limpar atalhos anteriores
+            self.shortcut_service.unregister_all()
+            
+            # Registrar novos atalhos
+            email_key = shortcuts_config.get("email", "ctrl+shift+e")
+            cpf_key = shortcuts_config.get("cpf", "ctrl+shift+c")
+            cep_key = shortcuts_config.get("cep", "ctrl+shift+z")
+            
+            print(f"\n[REGISTER] Email: '{email_key}' (type: {type(email_key).__name__})")
+            print(f"[REGISTER] CPF: '{cpf_key}' (type: {type(cpf_key).__name__})")
+            print(f"[REGISTER] CEP: '{cep_key}' (type: {type(cep_key).__name__})")
+            
+            print(f"[REGISTER] Registrando email_key...")
+            self.shortcut_service.register(email_key, on_email)
+            print(f"[REGISTER] Email registrado!")
+            
+            print(f"[REGISTER] Registrando cpf_key...")
+            self.shortcut_service.register(cpf_key, on_cpf)
+            print(f"[REGISTER] CPF registrado!")
+            
+            print(f"[REGISTER] Registrando cep_key...")
+            self.shortcut_service.register(cep_key, on_cep)
+            print(f"[REGISTER] CEP registrado!")
+            
             self.monitoring = True
-            print("[OK] Atalhos registrados com sucesso!")
+            print(f"[OK] Atalhos registrados com sucesso!")
+            print(f"     Email: {email_key}")
+            print(f"     CPF: {cpf_key}")
+            print(f"     CEP: {cep_key}")
         except Exception as e:
-            print(f"[WARN] Erro ao registrar atalhos: {e}")
+            print(f"[ERRO] Falha ao registrar atalhos: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
     
     def stop_monitoring(self):
         """Para o monitoramento de atalhos."""
@@ -76,7 +148,7 @@ class ShortcutManager:
             self.monitoring = False
             print("[OK] Atalhos removidos")
         except Exception as e:
-            print(f"[WARN] Erro ao remover atalhos: {e}")
+            print(f"[ERRO] Erro ao remover atalhos: {e}")
     
     def is_monitoring(self):
         """Verifica se está monitorando."""

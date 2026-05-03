@@ -3,38 +3,50 @@ Serviço de atalhos globais - Implementa IShortcutService.
 Adaptação do código original shortcut_manager.py
 """
 import keyboard
-from typing import Dict, Callable, Optional
+import threading
+from typing import Dict, Callable, Optional, List, Tuple
 from ...domain.interfaces.repositories import IShortcutService, ILogger
 
 
 class GlobalKeyboardShortcutService(IShortcutService):
-    """Gerencia atalhos globais de teclado."""
+    """Gerencia atalhos globais de teclado com suporte a threading."""
     
     def __init__(self, logger: ILogger):
         self.logger = logger
-        self.registered_shortcuts: Dict[str, str] = {}
+        self.registered_hotkeys: Dict[str, str] = {}
+        self.hotkey_callbacks: List[Tuple[str, Callable]] = []
         self.monitoring = False
+        self._listener_thread: Optional[threading.Thread] = None
     
     def register(self, hotkey: str, callback: Callable) -> None:
         """Registra um atalho global."""
         try:
-            normalized = hotkey.lower().replace(' ', '')
+            normalized = hotkey.lower().strip().replace(' ', '')
+            
+            # Remove espaços extras e normaliza
+            normalized = normalized.replace('+', '+')
+            
+            # Adiciona o hotkey
             keyboard.add_hotkey(normalized, callback, suppress=True)
-            self.registered_shortcuts[hotkey] = normalized
+            self.registered_hotkeys[hotkey] = normalized
+            self.hotkey_callbacks.append((normalized, callback))
             self.monitoring = True
-            self.logger.debug(f"Atalho registrado: {hotkey}")
+            
+            self.logger.debug(f"✓ Atalho registrado: {hotkey} -> {normalized}")
         except Exception as e:
-            self.logger.error(f"Erro ao registrar atalho {hotkey}: {str(e)}")
+            self.logger.error(f"✗ Erro ao registrar atalho {hotkey}: {str(e)}")
+            raise
     
     def unregister_all(self) -> None:
         """Remove todos os atalhos registrados."""
         try:
             keyboard.clear_all_hotkeys()
-            self.registered_shortcuts.clear()
+            self.registered_hotkeys.clear()
+            self.hotkey_callbacks.clear()
             self.monitoring = False
-            self.logger.debug("Todos os atalhos removidos")
+            self.logger.debug("✓ Todos os atalhos removidos")
         except Exception as e:
-            self.logger.error(f"Erro ao remover atalhos: {str(e)}")
+            self.logger.error(f"✗ Erro ao remover atalhos: {str(e)}")
     
     def is_monitoring(self) -> bool:
         """Verifica se está monitorando atalhos."""
