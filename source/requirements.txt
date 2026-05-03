@@ -1,0 +1,8 @@
+pyperclip==1.8.2
+requests>=2.31.0
+PyQt5>=5.15.0
+PyQt5-sip>=12.13.0
+qtawesome>=1.4.0
+keyboard>=0.13.5
+pyinstaller>=6.1.0
+python-dotenv>=1.0.0
