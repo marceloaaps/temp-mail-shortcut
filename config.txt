@@ -1,8 +1,8 @@
 {
   "shortcuts": {
     "email": "Ctrl+B",
-    "cpf": "7",
-    "cep": "5"
+    "cpf": "Ctrl+9",
+    "cep": "8"
   },
   "api": {
     "rapidapi_key": "asdas5",

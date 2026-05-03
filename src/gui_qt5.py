@@ -16,7 +16,7 @@ from PyQt5.QtWidgets import (
     QFrame, QScrollArea, QInputDialog, QMessageBox, QSizePolicy
 )
 from PyQt5.QtCore import Qt, QSize, QTimer, pyqtSignal, QObject
-from PyQt5.QtGui import QFont, QColor, QIcon, QPixmap, QCursor
+from PyQt5.QtGui import QFont, QColor, QIcon, QPixmap, QCursor, QKeySequence
 from PyQt5.QtCore import QPropertyAnimation, QEasingCurve, QRect
 import qtawesome as qta
 
@@ -274,6 +274,42 @@ class ModernCard(QWidget):
 class EventSignals(QObject):
     """Sinais customizados para callbacks"""
     shortcut_triggered = pyqtSignal(str, dict)
+
+
+class ShortcutCaptureLineEdit(QLineEdit):
+    """Campo que captura automaticamente uma combinacao de teclas."""
+
+    _MODIFIER_ONLY_KEYS = {
+        Qt.Key_Control,
+        Qt.Key_Shift,
+        Qt.Key_Alt,
+        Qt.Key_Meta,
+        Qt.Key_AltGr,
+        Qt.Key_CapsLock,
+        Qt.Key_NumLock,
+        Qt.Key_ScrollLock,
+    }
+
+    def __init__(self, text: str = "", parent=None):
+        super().__init__(parent)
+        self.setText(text)
+        self.setPlaceholderText("Clique e pressione o atalho")
+        self.setToolTip("Clique aqui e pressione a combinação desejada")
+
+    def keyPressEvent(self, event):
+        key = event.key()
+        if key in self._MODIFIER_ONLY_KEYS:
+            event.accept()
+            return
+
+        modifiers = int(event.modifiers())
+        sequence = QKeySequence(modifiers | key)
+        text = sequence.toString(QKeySequence.PortableText)
+        if text:
+            self.setText(text)
+            self.selectAll()
+
+        event.accept()
 
 
 class ToastNotification(QWidget):
@@ -700,7 +736,7 @@ class TempMailShortcutGUI(QMainWindow):
         email_btn.setMinimumHeight(30)
         email_btn.setCursor(QCursor(Qt.PointingHandCursor))
         email_btn.clicked.connect(lambda: self._generate('email'))
-        self.email_input = QLineEdit()
+        self.email_input = ShortcutCaptureLineEdit()
         self.email_input.setText(self.config_manager.get('shortcuts.email', 'Ctrl+Shift+E'))
         email_save = QPushButton()
         email_save.setIcon(IconManager.get_check())
@@ -724,7 +760,7 @@ class TempMailShortcutGUI(QMainWindow):
         cpf_btn.setMinimumHeight(30)
         cpf_btn.setCursor(QCursor(Qt.PointingHandCursor))
         cpf_btn.clicked.connect(lambda: self._generate('cpf'))
-        self.cpf_input = QLineEdit()
+        self.cpf_input = ShortcutCaptureLineEdit()
         self.cpf_input.setText(self.config_manager.get('shortcuts.cpf', 'Ctrl+Shift+C'))
         cpf_save = QPushButton()
         cpf_save.setIcon(IconManager.get_check())
@@ -748,7 +784,7 @@ class TempMailShortcutGUI(QMainWindow):
         cep_btn.setMinimumHeight(30)
         cep_btn.setCursor(QCursor(Qt.PointingHandCursor))
         cep_btn.clicked.connect(lambda: self._generate('cep'))
-        self.cep_input = QLineEdit()
+        self.cep_input = ShortcutCaptureLineEdit()
         self.cep_input.setText(self.config_manager.get('shortcuts.cep', 'Ctrl+Shift+Z'))
         cep_save = QPushButton()
         cep_save.setIcon(IconManager.get_check())
