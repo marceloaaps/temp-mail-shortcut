@@ -12,7 +12,7 @@ from typing import Optional, Dict, Any
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QLineEdit, QCheckBox, QTextEdit, QTabWidget,
-    QFrame, QScrollArea, QInputDialog, QMessageBox
+    QFrame, QScrollArea, QInputDialog, QMessageBox, QSizePolicy
 )
 from PyQt5.QtCore import Qt, QSize, QTimer, pyqtSignal, QObject
 from PyQt5.QtGui import QFont, QColor, QIcon, QPixmap, QCursor
@@ -226,38 +226,48 @@ class IconManager:
         return cls._icons.get('gear', qta.icon('fa5s.cog', color=COLORS['fg']))
 
 
-class ModernCard(QFrame):
-    """Widget customizado para cards com bordas arredondadas e sombra"""
+class ModernCard(QWidget):
+    """Widget customizado para cards com bordas arredondadas e sombra.
+    The title is placed outside the bordered content frame so it does not
+    appear boxed by the card border.
+    """
     def __init__(self, title: str = ""):
         super().__init__()
-        self.setFrameShape(QFrame.StyledPanel)
-        self.setStyleSheet(f"""
+
+        # Main container layout for the card (holds optional title + content frame)
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(6)
+
+        # Content frame which holds the actual card widgets and shows the border/bg
+        content_frame = QFrame()
+        content_frame.setFrameShape(QFrame.StyledPanel)
+        content_frame.setStyleSheet(f"""
             QFrame {{
                 background-color: {COLORS['card_bg']};
                 border: 1px solid {COLORS['border']};
                 border-radius: 8px;
             }}
         """)
-        
+
+        # Inner layout where callers will add widgets (keeps original API: .layout)
         self.layout = QVBoxLayout()
         self.layout.setContentsMargins(12, 12, 12, 12)
         self.layout.setSpacing(10)
-        
+        content_frame.setLayout(self.layout)
+
+        # If a title was provided, add it to the top of the inner layout so
+        # it appears inside the card box (no separate border/background).
         if title:
             title_label = QLabel(title)
             title_label.setFont(QFont('Segoe UI', 11, QFont.Bold))
-            title_label.setStyleSheet(f"color: {COLORS['primary']}; background: transparent;")
+            title_label.setStyleSheet(f"color: {COLORS['fg']}; background: transparent; border: none; padding-bottom: 6px;")
             title_label.setWordWrap(True)
-            self.layout.addWidget(title_label)
-            
-            # Separador
-            separator = QFrame()
-            separator.setFrameShape(QFrame.HLine)
-            separator.setStyleSheet(f"background-color: {COLORS['border']};")
-            separator.setMaximumHeight(1)
-            self.layout.addWidget(separator)
-        
-        self.setLayout(self.layout)
+            # Insert title at the top of the inner layout
+            self.layout.insertWidget(0, title_label)
+
+        main_layout.addWidget(content_frame)
+        self.setLayout(main_layout)
 
 
 class EventSignals(QObject):
@@ -265,12 +275,129 @@ class EventSignals(QObject):
     shortcut_triggered = pyqtSignal(str, dict)
 
 
+class TitleBar(QWidget):
+    """Barra de título customizada para janela sem moldura."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._parent = parent
+        self.setFixedHeight(36)
+        self.setObjectName('TitleBar')
+        self.setStyleSheet(f"background: {COLORS['titlebar']};")
+
+        layout = QHBoxLayout()
+        layout.setContentsMargins(12, 0, 8, 0)
+        layout.setSpacing(8)
+
+        # GitHub logo button (left of title) - opens project link or README
+        self.github_btn = QPushButton()
+        try:
+            gh_icon = qta.icon('fa5b.github', color='white')
+        except Exception:
+            gh_icon = qta.icon('fa5s.github', color='white')
+        self.github_btn.setIcon(gh_icon)
+        self.github_btn.setToolTip('Abrir repositório do projeto')
+        self.github_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        self.github_btn.setFixedSize(28, 28)
+        self.github_btn.setStyleSheet('QPushButton { background: transparent; border: none; } QPushButton:hover { background: rgba(255,255,255,0.04); }')
+        self.github_btn.clicked.connect(self._open_project_link)
+        layout.addWidget(self.github_btn)
+
+        # App title
+        self.title_label = QLabel("Fake Data Generator")
+        # Ensure no border/padding so title appears clean in the custom header
+        self.title_label.setStyleSheet(
+            f"color: {COLORS['fg']}; background: transparent; border: none; padding: 0; margin: 0;"
+        )
+        self.title_label.setFont(QFont('Segoe UI', 10))
+        layout.addWidget(self.title_label)
+        layout.addStretch()
+
+        # Buttons
+        self.btn_min = QPushButton()
+        self.btn_min.setIcon(qta.icon('fa5s.window-minimize', color='white'))
+        self._style_title_button(self.btn_min)
+        self.btn_min.clicked.connect(self._on_minimize)
+
+        self.btn_max = QPushButton()
+        self.btn_max.setIcon(qta.icon('fa5s.window-maximize', color='white'))
+        self._style_title_button(self.btn_max)
+        self.btn_max.clicked.connect(self._on_max_restore)
+
+        self.btn_close = QPushButton()
+        self.btn_close.setIcon(qta.icon('fa5s.times', color='white'))
+        self._style_title_button(self.btn_close, close=True)
+        self.btn_close.clicked.connect(self._on_close)
+
+        for b in (self.btn_min, self.btn_max, self.btn_close):
+            b.setCursor(QCursor(Qt.PointingHandCursor))
+            b.setFixedSize(34, 28)
+            layout.addWidget(b)
+
+        self.setLayout(layout)
+        self._start_pos = None
+
+    def _open_project_link(self):
+        import webbrowser
+        webbrowser.open('https://github.com/marceloaaps/temp-mail-shortcut')
+
+    def _style_title_button(self, btn: QPushButton, close: bool = False):
+        # white icon, transparent background; hover light white, close hover red
+        base = (
+            "QPushButton { background: transparent; border: none; color: white; }"
+            "QPushButton:hover { background: rgba(255,255,255,0.06); }"
+            "QPushButton:pressed { background: rgba(255,255,255,0.10); }"
+        )
+        if close:
+            base = (
+                "QPushButton { background: transparent; border: none; color: white; }"
+                "QPushButton:hover { background: rgba(248,81,73,0.28); }"
+                "QPushButton:pressed { background: rgba(248,81,73,0.36); }"
+            )
+        btn.setStyleSheet(base)
+
+    def _on_minimize(self):
+        if self._parent:
+            self._parent.showMinimized()
+
+    def _on_max_restore(self):
+        if not self._parent:
+            return
+        if self._parent.isMaximized():
+            self._parent.showNormal()
+            self.btn_max.setIcon(qta.icon('fa5s.window-maximize', color='white'))
+        else:
+            self._parent.showMaximized()
+            self.btn_max.setIcon(qta.icon('fa5s.window-restore', color='white'))
+
+    def _on_close(self):
+        if self._parent:
+            self._parent.close()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self._start_pos = event.globalPos() - self._parent.frameGeometry().topLeft()
+            event.accept()
+
+    def mouseMoveEvent(self, event):
+        if self._start_pos is not None and event.buttons() & Qt.LeftButton:
+            self._parent.move(event.globalPos() - self._start_pos)
+            event.accept()
+
+    def mouseReleaseEvent(self, event):
+        self._start_pos = None
+
+    def mouseDoubleClickEvent(self, event):
+        # double click title toggles maximize/restore
+        self._on_max_restore()
+
+
+
 class TempMailShortcutGUI(QMainWindow):
     """Interface gráfica moderna com PyQt5"""
     
     def __init__(self, config_path: str = None):
         super().__init__()
-        
+
         self.config_manager = ConfigManager(config_path)
         self.data_generator = DataGenerator(
             self.config_manager.get("api.rapidapi_key")
@@ -284,21 +411,42 @@ class TempMailShortcutGUI(QMainWindow):
         self.signals = EventSignals()
         self.generated_data_log = []
         self.is_monitoring = False
+        # conectar sinal para processar atalhos de forma thread-safe
+        self.signals.shortcut_triggered.connect(self._process_shortcut_result)
         
         self.initUI()
         self._apply_stylesheet()
+        # Restaurar estado de ativação de atalhos salvo em config
+        try:
+            enabled = bool(self.config_manager.get('hotkeys_enabled', False))
+            # Set the checkbox state (this will trigger _toggle_global_hotkeys)
+            if hasattr(self, 'hotkeys_checkbox'):
+                self.hotkeys_checkbox.setChecked(enabled)
+        except Exception as e:
+            print(f"[GUI] Erro ao ler estado hotkeys do config: {e}")
     
     def initUI(self):
         """Inicializa a interface gráfica"""
+        # Use a frameless window so we can draw a custom title bar
         self.setWindowTitle('Fake Data Generator - By Marcelo A.')
         self.setGeometry(100, 100, 1200, 700)
         self.setMinimumSize(QSize(1000, 600))
+        self.setWindowFlag(Qt.FramelessWindowHint, True)
         
-        # Widget central
+        # Widget central (com TitleBar + conteúdo)
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        
-        # Layout principal
+
+        # Layout principal vertical: titlebar em cima + conteúdo abaixo
+        outer_layout = QVBoxLayout()
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(0)
+
+        # Title bar customizada
+        self.title_bar = TitleBar(self)
+        outer_layout.addWidget(self.title_bar)
+
+        # Conteúdo principal abaixo da titlebar
         main_layout = QHBoxLayout()
         main_layout.setContentsMargins(15, 15, 15, 15)
         main_layout.setSpacing(15)
@@ -311,7 +459,8 @@ class TempMailShortcutGUI(QMainWindow):
         right_column = self._create_right_column()
         main_layout.addLayout(right_column, 1)
         
-        central_widget.setLayout(main_layout)
+        outer_layout.addLayout(main_layout)
+        central_widget.setLayout(outer_layout)
     
     def _create_left_column(self) -> QVBoxLayout:
         """Cria coluna esquerda com API Key e Status"""
@@ -320,19 +469,53 @@ class TempMailShortcutGUI(QMainWindow):
         layout.setSpacing(12)
         
         # Seção: Introdução
-        intro_card = ModernCard("Temp Mail Shortcut")
+        intro_card = ModernCard("Fake Data Generator")
+        intro_card.setMinimumWidth(520)
         intro_label = QLabel(
-            "Gerador rápido de dados\ntemporários com um clique\nou atalho global"
+            "Gerador rápido de dados temporários com um clique ou atalho global"
         )
         intro_label.setFont(QFont('Segoe UI', 9))
-        intro_label.setStyleSheet(f"color: {COLORS['fg']}; background: transparent;")
+        # Remove any border around the label and ensure transparent background
+        intro_label.setStyleSheet(f"color: {COLORS['fg']}; background: transparent; border: none;")
+        intro_label.setFrameShape(QFrame.NoFrame)
+        intro_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        intro_label.setMinimumWidth(520)
         intro_label.setWordWrap(True)
         intro_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         intro_card.layout.addWidget(intro_label)
+
+        author_layout = QHBoxLayout()
+        author_layout.setContentsMargins(0, 2, 0, 0)
+        author_layout.setSpacing(6)
+
+        author_label = QLabel("Criado por: Marcelo Alexandre Alves")
+        author_label.setFont(QFont('Segoe UI', 8))
+        author_label.setStyleSheet(
+            f"color: {COLORS['fg']}; background: transparent; border: none;"
+        )
+
+        linkedin_btn = QPushButton()
+        linkedin_btn.setIcon(qta.icon('fa5b.linkedin', color='white'))
+        linkedin_btn.setToolTip("Abrir perfil do LinkedIn")
+        linkedin_btn.setCursor(QCursor(Qt.PointingHandCursor))
+        linkedin_btn.setFixedSize(20, 20)
+        linkedin_btn.setStyleSheet(
+            "QPushButton { background: transparent; border: none; }"
+            "QPushButton:hover { background: rgba(255,255,255,0.06); border-radius: 4px; }"
+        )
+        # Placeholder: substitua pela URL real do seu perfil.
+        linkedin_btn.clicked.connect(
+            lambda: webbrowser.open('https://www.linkedin.com/in/SEU-USUARIO')
+        )
+
+        author_layout.addWidget(author_label)
+        author_layout.addWidget(linkedin_btn)
+        author_layout.addStretch()
+        intro_card.layout.addLayout(author_layout)
         layout.addWidget(intro_card)
         
         # Seção: API Key
-        api_card = ModernCard("Informações de API Key")
+        api_card = ModernCard("Email Temporário: Chave de API")
         
         # Input API Key
         api_layout = QHBoxLayout()
@@ -371,7 +554,8 @@ class TempMailShortcutGUI(QMainWindow):
         link_label.setText('<a href="https://rapidapi.com" style="color: #d29922;">Consiga em: rapidapi.com</a>')
         link_label.setOpenExternalLinks(True)
         link_label.setFont(QFont('Segoe UI', 8))
-        link_label.setStyleSheet("background: transparent;")
+        link_label.setStyleSheet("background: transparent; border: none; padding: 0; margin: 0;")
+        link_label.setFrameShape(QFrame.NoFrame)
         link_label.setCursor(QCursor(Qt.PointingHandCursor))
         api_card.layout.addWidget(link_label)
         
@@ -556,6 +740,11 @@ class TempMailShortcutGUI(QMainWindow):
                 self.status_text.setText("Ativado")
                 self.status_text.setStyleSheet(f"color: {COLORS['success']};")
                 self._add_shortcut_log("Atalhos globais ativados")
+                # Persistir estado
+                try:
+                    self.config_manager.set('hotkeys_enabled', True)
+                except Exception:
+                    print('[GUI] Falha ao salvar hotkeys_enabled=True no config')
             except Exception as e:
                 self.hotkeys_checkbox.setChecked(False)
                 self._show_message("Erro", f"Erro ao ativar: {str(e)[:50]}", "error")
@@ -568,6 +757,11 @@ class TempMailShortcutGUI(QMainWindow):
                 self.status_text.setText("Desativado")
                 self.status_text.setStyleSheet(f"color: {COLORS['warning']};")
                 self._add_shortcut_log("Atalhos globais desativados")
+                # Persistir estado
+                try:
+                    self.config_manager.set('hotkeys_enabled', False)
+                except Exception:
+                    print('[GUI] Falha ao salvar hotkeys_enabled=False no config')
             except Exception as e:
                 self._show_message("Erro", f"Erro ao desativar: {str(e)[:50]}", "error")
     
@@ -625,9 +819,6 @@ class TempMailShortcutGUI(QMainWindow):
     def _add_generated_log(self, data_type: str, value: str):
         """Adiciona ao log de dados gerados"""
         print(f"[GUI] _add_generated_log() chamado: type={data_type}, value={value}")
-        print(f"[GUI] self.generated_log = {self.generated_log}")
-        print(f"[GUI] self.generated_data_log antes = {self.generated_data_log}")
-        
         timestamp = datetime.now().strftime('%H:%M:%S')
         
         type_map = {'email': 'Email', 'cpf': 'CPF', 'cep': 'CEP'}
@@ -638,20 +829,10 @@ class TempMailShortcutGUI(QMainWindow):
         self.generated_data_log.insert(0, log_entry)
         self.generated_data_log = self.generated_data_log[:20]
         
-        print(f"[GUI] self.generated_data_log depois = {self.generated_data_log}")
-        
         text_content = '\n'.join(self.generated_data_log)
-        print(f"[GUI] text_content = {text_content[:100]}...")
         print(f"[GUI] Atualizando gerado_log com {len(self.generated_data_log)} linhas")
-        
-        try:
-            self.generated_log.setPlainText(text_content)
-            print(f"[GUI] setPlainText() chamado com sucesso")
-            print(f"[GUI] generated_log.toPlainText() = {self.generated_log.toPlainText()[:100]}...")
-        except Exception as e:
-            print(f"[GUI] ERRO ao chamar setPlainText(): {e}")
-            import traceback
-            traceback.print_exc()
+        self.generated_log.setPlainText(text_content)
+        print(f"[GUI] generated_log atualizado")
     
     def _add_shortcut_log(self, message: str):
         """Adiciona ao log de atalhos utilizados"""
@@ -663,10 +844,13 @@ class TempMailShortcutGUI(QMainWindow):
         print(f"[GUI] shortcuts_log atualizado")
     
     def _on_shortcut_triggered(self, data_type: str, result: dict):
-        """Callback quando um atalho global é acionado - thread-safe"""
-        # Passar para a thread principal usando QTimer para evitar erro de thread
-        # "Cannot create children for a parent that is in a different thread"
-        QTimer.singleShot(0, lambda: self._process_shortcut_result(data_type, result))
+        """Callback quando um atalho global é acionado.
+        Emite um sinal Qt que é thread-safe e será entregue na thread principal.
+        """
+        try:
+            self.signals.shortcut_triggered.emit(data_type, result)
+        except Exception as e:
+            print(f"[GUI] Erro ao emitir signal shortcut_triggered: {e}")
     
     def _process_shortcut_result(self, data_type: str, result: dict):
         """Processa o resultado do atalho na thread principal"""

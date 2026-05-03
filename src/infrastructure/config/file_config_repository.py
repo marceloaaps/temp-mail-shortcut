@@ -42,6 +42,10 @@ class FileConfigRepository(IConfigRepository):
                 "rapidapi_host": "temp-mail.p.rapidapi.com"
             }
         }
+        # State whether global hotkeys should be enabled on startup
+        # Defaults to False for safety
+        if "hotkeys_enabled" not in self.default_config:
+            self.default_config["hotkeys_enabled"] = False
         
         self._config = self._load()
     

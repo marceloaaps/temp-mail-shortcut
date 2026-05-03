@@ -1,12 +1,13 @@
 {
   "shortcuts": {
     "email": "Ctrl+B",
-    "cpf": "Shift+R",
-    "cep": "Ctrl+R"
+    "cpf": "7",
+    "cep": "6"
   },
   "api": {
-    "rapidapi_key": "asdas",
+    "rapidapi_key": "asdas5",
     "rapidapi_host": "temp-mail.p.rapidapi.com"
   },
-  "app_version": "1.0.0"
+  "app_version": "1.0.0",
+  "hotkeys_enabled": true
 }

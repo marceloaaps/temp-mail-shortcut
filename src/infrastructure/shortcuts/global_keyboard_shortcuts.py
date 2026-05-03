@@ -22,16 +22,20 @@ class GlobalKeyboardShortcutService(IShortcutService):
         """Registra um atalho global."""
         try:
             normalized = hotkey.lower().strip().replace(' ', '')
-            
-            # Remove espaços extras e normaliza
+
+            # Normalize plus signs consistently
             normalized = normalized.replace('+', '+')
-            
-            # Adiciona o hotkey
-            keyboard.add_hotkey(normalized, callback, suppress=True)
+
+            # Debug log before registration
+            self.logger.debug(f"Registering hotkey request: raw='{hotkey}', normalized='{normalized}'")
+
+            # Add the hotkey. Do not suppress by default to avoid swallowing events
+            # that might interfere with subsequent hotkeys; this also helps debugging.
+            keyboard.add_hotkey(normalized, callback, suppress=False)
             self.registered_hotkeys[hotkey] = normalized
             self.hotkey_callbacks.append((normalized, callback))
             self.monitoring = True
-            
+
             self.logger.debug(f"✓ Atalho registrado: {hotkey} -> {normalized}")
         except Exception as e:
             self.logger.error(f"✗ Erro ao registrar atalho {hotkey}: {str(e)}")
@@ -40,6 +44,7 @@ class GlobalKeyboardShortcutService(IShortcutService):
     def unregister_all(self) -> None:
         """Remove todos os atalhos registrados."""
         try:
+            self.logger.debug(f"Unregistering all hotkeys: {self.registered_hotkeys}")
             keyboard.clear_all_hotkeys()
             self.registered_hotkeys.clear()
             self.hotkey_callbacks.clear()
