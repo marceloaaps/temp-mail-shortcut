@@ -4,6 +4,7 @@ Inspirado no padrão visual do GitHub com tema escuro minimalista.
 """
 
 import sys
+import os
 from pathlib import Path
 from datetime import datetime
 import webbrowser
@@ -275,6 +276,59 @@ class EventSignals(QObject):
     shortcut_triggered = pyqtSignal(str, dict)
 
 
+class ToastNotification(QWidget):
+    """Notificacao discreta na tela, nao clicavel, com auto fechamento."""
+    def __init__(self, message: str, duration_ms: int = 5000, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(
+            Qt.FramelessWindowHint | Qt.Tool | Qt.WindowStaysOnTopHint
+        )
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setAttribute(Qt.WA_ShowWithoutActivating, True)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+
+        layout = QHBoxLayout()
+        layout.setContentsMargins(14, 10, 14, 10)
+        layout.setSpacing(8)
+
+        icon_label = QLabel()
+        icon_label.setPixmap(qta.icon('fa5s.check-circle', color=COLORS['success']).pixmap(16, 16))
+        icon_label.setStyleSheet("background: transparent; border: none;")
+
+        text_label = QLabel(message)
+        text_label.setStyleSheet(
+            f"color: {COLORS['fg']}; background: transparent; border: none; font-weight: 600;"
+        )
+        text_label.setWordWrap(True)
+
+        layout.addWidget(icon_label)
+        layout.addWidget(text_label)
+        self.setLayout(layout)
+
+        self.setStyleSheet(
+            f"QWidget {{"
+            f" background-color: {COLORS['card_bg']};"
+            f" border: 1px solid {COLORS['border']};"
+            f" border-left: 3px solid {COLORS['success']};"
+            f" border-radius: 10px;"
+            f" }}"
+        )
+
+        self.adjustSize()
+        self._position_on_screen()
+        QTimer.singleShot(duration_ms, self.close)
+
+    def _position_on_screen(self):
+        screen = QApplication.primaryScreen()
+        if not screen:
+            return
+        rect = screen.availableGeometry()
+        margin = 16
+        x = rect.right() - self.width() - margin
+        y = rect.bottom() - self.height() - margin
+        self.move(x, y)
+
+
 class TitleBar(QWidget):
     """Barra de título customizada para janela sem moldura."""
     def __init__(self, parent=None):
@@ -411,6 +465,7 @@ class TempMailShortcutGUI(QMainWindow):
         self.signals = EventSignals()
         self.generated_data_log = []
         self.is_monitoring = False
+        self._active_toast = None
         # conectar sinal para processar atalhos de forma thread-safe
         self.signals.shortcut_triggered.connect(self._process_shortcut_result)
         
@@ -424,6 +479,14 @@ class TempMailShortcutGUI(QMainWindow):
                 self.hotkeys_checkbox.setChecked(enabled)
         except Exception as e:
             print(f"[GUI] Erro ao ler estado hotkeys do config: {e}")
+
+        # Restaurar estado de inicialização com o sistema
+        try:
+            startup_enabled = bool(self.config_manager.get('startup_with_os', False))
+            if hasattr(self, 'startup_checkbox'):
+                self.startup_checkbox.setChecked(startup_enabled)
+        except Exception as e:
+            print(f"[GUI] Erro ao ler estado startup_with_os do config: {e}")
     
     def initUI(self):
         """Inicializa a interface gráfica"""
@@ -584,9 +647,26 @@ class TempMailShortcutGUI(QMainWindow):
         # Checkbox ativar atalhos
         self.hotkeys_checkbox = QCheckBox("Ativar atalhos globais")
         self.hotkeys_checkbox.setFont(QFont('Segoe UI', 9))
+        self.hotkeys_checkbox.setStyleSheet(
+            f"QCheckBox {{ color: {COLORS['fg']}; background: transparent; border: none; font-weight: 700; }}"
+            f"QCheckBox::indicator {{ width: 14px; height: 14px; border-radius: 3px; border: 1px solid {COLORS['border']}; background: transparent; }}"
+            f"QCheckBox::indicator:checked {{ border: 1px solid {COLORS['success']}; background: {COLORS['success']}; }}"
+        )
         self.hotkeys_checkbox.setCursor(QCursor(Qt.PointingHandCursor))
         self.hotkeys_checkbox.stateChanged.connect(self._toggle_global_hotkeys)
         status_card.layout.addWidget(self.hotkeys_checkbox)
+
+        # Checkbox inicializar com sistema operacional
+        self.startup_checkbox = QCheckBox("Inicializar com Sistema Operacional")
+        self.startup_checkbox.setFont(QFont('Segoe UI', 9))
+        self.startup_checkbox.setStyleSheet(
+            f"QCheckBox {{ color: {COLORS['fg']}; background: transparent; border: none; font-weight: 700; }}"
+            f"QCheckBox::indicator {{ width: 14px; height: 14px; border-radius: 3px; border: 1px solid {COLORS['border']}; background: transparent; }}"
+            f"QCheckBox::indicator:checked {{ border: 1px solid {COLORS['success']}; background: {COLORS['success']}; }}"
+        )
+        self.startup_checkbox.setCursor(QCursor(Qt.PointingHandCursor))
+        self.startup_checkbox.stateChanged.connect(self._toggle_startup_with_os)
+        status_card.layout.addWidget(self.startup_checkbox)
         
         layout.addWidget(status_card)
         
@@ -594,13 +674,11 @@ class TempMailShortcutGUI(QMainWindow):
         log_card = ModernCard("Atalhos Utilizados")
         self.shortcuts_log = QTextEdit()
         self.shortcuts_log.setReadOnly(True)
-        self.shortcuts_log.setMaximumHeight(150)
         self.shortcuts_log.setMinimumHeight(100)
         self.shortcuts_log.setFont(QFont('Consolas', 8))
         log_card.layout.addWidget(self.shortcuts_log)
-        layout.addWidget(log_card)
-        
-        layout.addStretch()
+        layout.addWidget(log_card, 1)
+
         return layout
     
     def _create_right_column(self) -> QVBoxLayout:
@@ -618,7 +696,7 @@ class TempMailShortcutGUI(QMainWindow):
         email_layout.setContentsMargins(0, 0, 0, 0)
         email_layout.setSpacing(6)
         email_btn = QPushButton("Email")
-        email_btn.setMaximumWidth(70)
+        email_btn.setFixedWidth(74)
         email_btn.setMinimumHeight(30)
         email_btn.setCursor(QCursor(Qt.PointingHandCursor))
         email_btn.clicked.connect(lambda: self._generate('email'))
@@ -642,7 +720,7 @@ class TempMailShortcutGUI(QMainWindow):
         cpf_layout.setContentsMargins(0, 0, 0, 0)
         cpf_layout.setSpacing(6)
         cpf_btn = QPushButton("CPF")
-        cpf_btn.setMaximumWidth(70)
+        cpf_btn.setFixedWidth(74)
         cpf_btn.setMinimumHeight(30)
         cpf_btn.setCursor(QCursor(Qt.PointingHandCursor))
         cpf_btn.clicked.connect(lambda: self._generate('cpf'))
@@ -666,7 +744,7 @@ class TempMailShortcutGUI(QMainWindow):
         cep_layout.setContentsMargins(0, 0, 0, 0)
         cep_layout.setSpacing(6)
         cep_btn = QPushButton("CEP")
-        cep_btn.setMaximumWidth(70)
+        cep_btn.setFixedWidth(74)
         cep_btn.setMinimumHeight(30)
         cep_btn.setCursor(QCursor(Qt.PointingHandCursor))
         cep_btn.clicked.connect(lambda: self._generate('cep'))
@@ -696,7 +774,7 @@ class TempMailShortcutGUI(QMainWindow):
         self.generated_log.setObjectName("generatedLog")
         self.generated_log.setPlainText("Nenhum dado gerado ainda...")
         log_card.layout.addWidget(self.generated_log)
-        layout.addWidget(log_card)
+        layout.addWidget(log_card, 1)
         
         return layout
     
@@ -764,6 +842,79 @@ class TempMailShortcutGUI(QMainWindow):
                     print('[GUI] Falha ao salvar hotkeys_enabled=False no config')
             except Exception as e:
                 self._show_message("Erro", f"Erro ao desativar: {str(e)[:50]}", "error")
+
+    def _toggle_startup_with_os(self):
+        """Ativa/desativa inicialização automática com o sistema operacional."""
+        enabled = self.startup_checkbox.isChecked()
+        try:
+            if enabled:
+                self._enable_startup_with_os()
+                self.config_manager.set('startup_with_os', True)
+                self._add_shortcut_log("Inicialização com sistema ativada")
+            else:
+                self._disable_startup_with_os()
+                self.config_manager.set('startup_with_os', False)
+                self._add_shortcut_log("Inicialização com sistema desativada")
+        except Exception as e:
+            # Reverte checkbox sem disparar novamente o handler
+            self.startup_checkbox.blockSignals(True)
+            self.startup_checkbox.setChecked(not enabled)
+            self.startup_checkbox.blockSignals(False)
+            self._show_message("Erro", f"Erro ao configurar inicialização: {str(e)[:80]}", "error")
+
+    def _get_startup_entry_path(self) -> Path:
+        """Retorna o caminho do arquivo de inicialização automática para o SO atual."""
+        if os.name == 'nt':
+            appdata = Path(os.environ.get('APPDATA', ''))
+            startup_dir = appdata / 'Microsoft' / 'Windows' / 'Start Menu' / 'Programs' / 'Startup'
+            return startup_dir / 'TempMailShortcut.cmd'
+
+        # Linux: .desktop em ~/.config/autostart
+        return Path.home() / '.config' / 'autostart' / 'temp-mail-shortcut.desktop'
+
+    def _enable_startup_with_os(self):
+        """Cria entrada de inicialização automática no Windows/Linux."""
+        startup_entry = self._get_startup_entry_path()
+        startup_entry.parent.mkdir(parents=True, exist_ok=True)
+
+        project_root = Path(__file__).resolve().parent.parent
+        if getattr(sys, 'frozen', False):
+            exec_cmd = f'"{Path(sys.executable).resolve()}"'
+            work_dir = Path(sys.executable).resolve().parent
+        else:
+            exec_cmd = f'"{Path(sys.executable).resolve()}" "{project_root / "main.py"}"'
+            work_dir = project_root
+
+        if os.name == 'nt':
+            content = (
+                "@echo off\n"
+                f"cd /d \"{work_dir}\"\n"
+                f"start \"\" {exec_cmd}\n"
+            )
+            startup_entry.write_text(content, encoding='utf-8')
+            return
+
+        # Linux autostart entry
+        desktop_content = (
+            "[Desktop Entry]\n"
+            "Type=Application\n"
+            "Name=Temp Mail Shortcut\n"
+            f"Exec={exec_cmd}\n"
+            f"Path={work_dir}\n"
+            "X-GNOME-Autostart-enabled=true\n"
+            "Terminal=false\n"
+        )
+        startup_entry.write_text(desktop_content, encoding='utf-8')
+        try:
+            startup_entry.chmod(0o755)
+        except Exception:
+            pass
+
+    def _disable_startup_with_os(self):
+        """Remove entrada de inicialização automática do Windows/Linux."""
+        startup_entry = self._get_startup_entry_path()
+        if startup_entry.exists():
+            startup_entry.unlink()
     
     def _save_shortcut(self, shortcut_type: str, input_widget: QLineEdit):
         """Salva um atalho customizado"""
@@ -865,20 +1016,76 @@ class TempMailShortcutGUI(QMainWindow):
                 print(f"[GUI] Adicionando ao log...")
                 self._add_generated_log(data_type, value)
                 self._add_shortcut_log(f"Atalho {data_type.upper()} acionado")
+                self._show_shortcut_toast(data_type)
                 print(f"[GUI] Log atualizado com sucesso!")
             else:
                 print(f"[GUI] Valor vazio ou None! value={value}")
+
+    def _show_shortcut_toast(self, data_type: str):
+        """Mostra notificação temporária para geração via atalho."""
+        type_map = {'email': 'Email', 'cpf': 'CPF', 'cep': 'CEP'}
+        type_name = type_map.get(data_type, data_type.upper())
+        message = f"Seu {type_name} foi criado."
+
+        if self._active_toast is not None:
+            try:
+                self._active_toast.close()
+            except Exception:
+                pass
+
+        self._active_toast = ToastNotification(message, duration_ms=5000, parent=None)
+        self._active_toast.show()
     
     def _show_message(self, title: str, message: str, msg_type: str = "info"):
-        """Mostra uma mensagem popup"""
+        """Mostra mensagem no estilo da aplicação (não nativo do OS)."""
+        msg_box = QMessageBox(self)
+        msg_box.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
+        msg_box.setTextFormat(Qt.RichText)
+        msg_box.setStandardButtons(QMessageBox.Ok)
+        msg_box.setWindowTitle("")
+
+        # Cor de destaque por tipo
+        accent = COLORS['primary']
+        icon = qta.icon('fa5s.info-circle', color=COLORS['primary'])
         if msg_type == "success":
-            QMessageBox.information(self, title, message)
+            accent = COLORS['success']
+            icon = qta.icon('fa5s.check-circle', color=COLORS['success'])
         elif msg_type == "error":
-            QMessageBox.critical(self, title, message)
+            accent = COLORS['danger']
+            icon = qta.icon('fa5s.exclamation-circle', color=COLORS['danger'])
         elif msg_type == "warning":
-            QMessageBox.warning(self, title, message)
-        else:
-            QMessageBox.information(self, title, message)
+            accent = COLORS['warning']
+            icon = qta.icon('fa5s.exclamation-triangle', color=COLORS['warning'])
+
+        msg_box.setIconPixmap(icon.pixmap(24, 24))
+        msg_box.setText(f"<b style='color:{COLORS['fg']}'>{title}</b><br><span style='color:{COLORS['fg']}'>{message}</span>")
+
+        msg_box.setStyleSheet(
+            f"QMessageBox {{"
+            f" background-color: {COLORS['card_bg']};"
+            f" border: 1px solid {COLORS['border']};"
+            f" border-top: 4px solid {accent};"
+            f" border-radius: 10px;"
+            f" }}"
+            f"QLabel {{"
+            f" color: {COLORS['fg']};"
+            f" background: transparent;"
+            f" border: none;"
+            f" }}"
+            f"QPushButton {{"
+            f" background-color: {COLORS['primary']};"
+            f" color: white;"
+            f" border: none;"
+            f" border-radius: 6px;"
+            f" padding: 6px 16px;"
+            f" font-weight: 700;"
+            f" min-width: 80px;"
+            f" }}"
+            f"QPushButton:hover {{ background-color: {COLORS['hover']}; }}"
+            f"QPushButton:pressed {{ background-color: #0860ca; }}"
+        )
+
+        msg_box.exec_()
     
     def closeEvent(self, event):
         """Limpa ao fechar a aplicação"""

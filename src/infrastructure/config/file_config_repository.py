@@ -46,6 +46,8 @@ class FileConfigRepository(IConfigRepository):
         # Defaults to False for safety
         if "hotkeys_enabled" not in self.default_config:
             self.default_config["hotkeys_enabled"] = False
+        if "startup_with_os" not in self.default_config:
+            self.default_config["startup_with_os"] = False
         
         self._config = self._load()
     
