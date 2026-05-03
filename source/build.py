@@ -32,7 +32,7 @@ def build_exe():
     ]
     
     try:
-        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True, cwd=project_dir)
         print("✅ Build concluído com sucesso!")
         print(f"\nExecutável criado em: {project_dir / 'dist' / 'TempMailShortcut.exe'}")
         print("\nPróximos passos:")

@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['E:\\Workspaces\\ws-py\\temp-mail-shortcut\\main.py'],
+    ['E:\\Workspaces\\ws-py\\temp-mail-shortcut\\source\\main.py'],
     pathex=[],
     binaries=[],
     datas=[('src', 'src')],
