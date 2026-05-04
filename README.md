@@ -1,6 +1,6 @@
-# Temp Mail Shortcut
+# Fake Data Generator
 
-Um aplicativo moderno em Python que gera dados temporários (Email, CPF, CEP) e os copia automaticamente para o clipboard com um simples clique. Inclui interface gráfica minimalista (PyQt5), atalhos globais e suporte multiplataforma.
+Um aplicativo em Python que gera dados temporários (Email, CPF, CEP) e os copia automaticamente para o clipboard com um simples uso de atalho ou clique. Inclui interface gráfica(PyQt5), atalhos globais e suporte multiplataforma (Win/Linux).
 
 ## 🎯 Funcionalidades
 
@@ -22,6 +22,11 @@ Um aplicativo moderno em Python que gera dados temporários (Email, CPF, CEP) e 
 - Chave de API RapidAPI (para usar o serviço de emails)
 
 ## 🚀 Instalação
+
+## Baixar .exe para FakeDataGen.exe para Windows
+## Executar build_appimage.sh para gerar AppImage - Linux
+
+## 🔧 Fazendo sua Própria Versão 
 
 ### Opção 1: Executável pré-compilado (recomendado para usuários)
 
