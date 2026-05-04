@@ -4,10 +4,9 @@ Gera: Email temporário, CPF e CEP
 Copia automaticamente para o clipboard
 """
 import sys
-from pathlib import Path
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QFont
-from src.gui_qt5 import TempMailShortcutGUI, STYLESHEET, IconManager
+from src.gui_qt5 import TempMailShortcutGUI, STYLESHEET, IconManager, get_app_icon
 
 
 def main():
@@ -17,20 +16,15 @@ def main():
     app = QApplication(sys.argv)
     app.setStyle('Fusion')
     app.setStyleSheet(STYLESHEET)
+    app.setWindowIcon(get_app_icon())
     
     # Inicializar ícones agora que QApplication está pronto
     IconManager.initialize()
     
-    # Define caminho de configuração
-    if getattr(sys, 'frozen', False):
-        # Executando como .exe (PyInstaller)
-        app_dir = Path(sys.executable).parent
-    else:
-        # Executando como script Python
-        app_dir = Path(__file__).parent
-    
     # Cria a interface gráfica
-    window = TempMailShortcutGUI(config_path=str(app_dir))
+    # Deixa o repositório de configuração decidir o local padrão
+    # (ou usar TEMPMAIL_CONFIG_DIR quando definido pelo wrapper/build)
+    window = TempMailShortcutGUI(config_path=None)
     window.show()
     
     # Executa o loop da aplicação

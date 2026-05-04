@@ -30,9 +30,9 @@ class FileConfigRepository(IConfigRepository):
             self.config_dir = Path(env_path)
         else:
             self.config_dir = (
-                Path.home() / "AppData" / "Local" / "TempMailShortcut"
+                Path(os.environ.get('APPDATA', Path.home() / 'AppData' / 'Roaming')) / 'TempMailShortcut'
                 if os.name == 'nt'
-                else Path.home() / ".tempmail-shortcut"
+                else Path.home() / '.tempmail-shortcut'
             )
         
         

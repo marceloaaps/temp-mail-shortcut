@@ -196,6 +196,35 @@ QScrollBar::handle:vertical:hover {{
 """
 
 
+def get_app_icon_path() -> Optional[Path]:
+    """Resolve the best application icon path available on disk."""
+    candidates = []
+
+    env_icon = os.environ.get("TEMPMAIL_ICON_PATH")
+    if env_icon:
+        candidates.append(Path(env_icon))
+
+    base_dir = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
+    candidates.extend([
+        base_dir / "assets" / "app-icon.ico",
+        base_dir / "assets" / "app-icon.png",
+        base_dir / "assets" / "app-icon.svg",
+    ])
+
+    for candidate in candidates:
+        if candidate and candidate.exists():
+            return candidate
+    return None
+
+
+def get_app_icon() -> QIcon:
+    """Load the application icon from assets, with a QtAwesome fallback."""
+    icon_path = get_app_icon_path()
+    if icon_path is not None:
+        return QIcon(str(icon_path))
+    return qta.icon('fa5s.envelope', color=COLORS['primary'])
+
+
 class IconManager:
     """Gerenciador centralizado de ícones da aplicação"""
     
@@ -493,6 +522,8 @@ class TempMailShortcutGUI(QMainWindow):
     def __init__(self, config_path: str = None):
         super().__init__()
         self._logger = logging.getLogger(__name__)
+        self._app_icon = get_app_icon()
+        self.setWindowIcon(self._app_icon)
         try:
             app = QApplication.instance()
             if app is not None:
@@ -587,7 +618,7 @@ class TempMailShortcutGUI(QMainWindow):
                     app.setQuitOnLastWindowClosed(False)
                 except Exception:
                     pass
-            self.tray_icon = QSystemTrayIcon(IconManager.get_gear(), parent=self)
+            self.tray_icon = QSystemTrayIcon(self._app_icon, parent=self)
             tray_menu = QMenu()
 
             show_action = QAction("Abrir", self)

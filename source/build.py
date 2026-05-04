@@ -15,6 +15,8 @@ def build_exe():
     
     # Caminho do projeto
     project_dir = Path(__file__).parent
+    assets_dir = project_dir / "assets"
+    icon_path = assets_dir / "app-icon.ico"
     
     # Comando PyInstaller
     cmd = [
@@ -30,6 +32,11 @@ def build_exe():
         "--specpath=.",
         str(project_dir / "main.py")
     ]
+
+    if assets_dir.exists():
+        cmd.insert(-1, f"--add-data=assets{os.pathsep}assets")
+        if icon_path.exists():
+            cmd.insert(-1, f"--icon={str(icon_path.resolve())}")
     
     try:
         result = subprocess.run(cmd, check=True, capture_output=True, text=True, cwd=project_dir)
