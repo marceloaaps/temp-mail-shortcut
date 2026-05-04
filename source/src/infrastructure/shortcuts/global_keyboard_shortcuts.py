@@ -2,9 +2,56 @@
 Serviço de atalhos globais - Implementa IShortcutService.
 Adaptação do código original shortcut_manager.py
 """
+import sys
 import keyboard
 from typing import Dict, Callable, Optional, List, Tuple
 from ...domain.interfaces.repositories import IShortcutService, ILogger
+
+
+class LinuxGlobalHotkeyPermissionError(RuntimeError):
+    """Falta permissão no Linux para a biblioteca `keyboard` registrar hooks globais."""
+
+
+class LinuxGlobalHotkeyDumpkeysError(RuntimeError):
+    """Linux: o utilitário dumpkeys (mapa da consola) falhou — comum em Wayland ou sem pacote kbd."""
+
+
+def _looks_like_keyboard_root_error(exc: BaseException) -> bool:
+    if not sys.platform.startswith("linux"):
+        return False
+    t = str(exc).lower()
+    return "must be root" in t or ("root" in t and "library" in t and "linux" in t)
+
+
+_LINUX_HOTKEY_HELP = (
+    "No Linux, os atalhos globais precisam ler /dev/input e /dev/uinput (grupo input, regras uinput — "
+    "veja INSTALL_LINUX.md).\n\n"
+    "Se você já configurou udev e o grupo input e AINDA vê «must be root»: a versão antiga do pacote "
+    "«keyboard» no PyPI (0.13.5) ignora isso e exige root. Reinstale as dependências do projeto "
+    "(pip install -r source/requirements.txt) para obter o keyboard instalado a partir do GitHub upstream.\n\n"
+    "• Teste rápido: rodar o app com sudo (só para isolar causa).\n"
+    "• Sem atalhos globais: use os botões Email, CPF e CEP na janela do app."
+)
+
+_DUMPKEYS_HELP = (
+    "A biblioteca «keyboard» usa o comando «dumpkeys» (pacote kbd) para mapear nomes de teclas. "
+    "Ele lê o mapa da consola virtual do kernel, não do Wayland.\n\n"
+    "O que verificar:\n"
+    "• Pacote: sudo apt install kbd — depois teste no terminal: dumpkeys --keys-only | head\n"
+    "• Grupo tty: sudo usermod -aG tty \"$USER\" — é obrigatório encerrar a sessão a fundo ou reiniciar; "
+    "«newgrp tty» no terminal não repassa o grupo à app gráfica.\n"
+    "• Sessão Wayland (GNOME/Ubuntu por omissão): «dumpkeys» falha com frequência. No ecrã de login, "
+    "abra o menu (ícone de engrenagem) e escolha «Ubuntu em Xorg» ou «GNOME em Xorg», depois volte a abrir o app.\n"
+    "• Confirme: groups (deve incluir tty e input).\n\n"
+    "Se nada disto resolver, use os botões da janela sem atalhos globais, ou considere outra biblioteca no futuro."
+)
+
+
+def _looks_like_dumpkeys_error(exc: BaseException) -> bool:
+    if not sys.platform.startswith("linux"):
+        return False
+    t = str(exc).lower()
+    return "dumpkeys" in t
 
 
 class GlobalKeyboardShortcutService(IShortcutService):
@@ -38,6 +85,10 @@ class GlobalKeyboardShortcutService(IShortcutService):
             self.logger.debug(f"✓ Atalho registrado: {hotkey} -> {normalized}")
         except Exception as e:
             self.logger.error(f"✗ Erro ao registrar atalho {hotkey}: {str(e)}")
+            if _looks_like_keyboard_root_error(e):
+                raise LinuxGlobalHotkeyPermissionError(_LINUX_HOTKEY_HELP) from e
+            if _looks_like_dumpkeys_error(e):
+                raise LinuxGlobalHotkeyDumpkeysError(_DUMPKEYS_HELP) from e
             raise
     
     def unregister_all(self) -> None:

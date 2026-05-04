@@ -3,6 +3,8 @@ requests>=2.31.0
 PyQt5>=5.15.0
 PyQt5-sip>=12.13.0
 qtawesome>=1.4.0
-keyboard>=0.13.5
+# PyPI 0.13.5 ainda chama ensure_root() no Linux e falha sempre sem root, mesmo com udev/uinput corretos.
+# Instalamos o snapshot upstream que remove essa checagem (grupos input/tty + permissões passam a valer).
+keyboard @ https://github.com/boppreh/keyboard/archive/d232de09bda50ecb5211ebcc59b85bc6da6aaa24.zip
 pyinstaller>=6.1.0
 python-dotenv>=1.0.0

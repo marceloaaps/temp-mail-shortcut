@@ -1,0 +1,19 @@
+# Permite que usuários no grupo "input" usem /dev/uinput sem root.
+# Necessário para atalhos globais (pacote Python "keyboard") no Linux.
+#
+# Instalação (Ubuntu / Debian), a partir da raiz do repositório:
+#   sudo install -m 644 scripts/udev/99-uinput-keyboard-hotkeys.rules /etc/udev/rules.d/
+#   (veja também INSTALL_LINUX.md)
+#
+# Depois:
+#   sudo udevadm control --reload-rules
+#   sudo udevadm trigger --subsystem-match=misc --sysname-match=uinput
+#   sudo usermod -aG input "$USER"
+#
+# Encerre a sessão gráfica (ou reinicie) para o novo grupo valer.
+#
+# Se /dev/uinput não existir:
+#   sudo modprobe uinput
+#   echo uinput | sudo tee /etc/modules-load.d/uinput.conf
+
+KERNEL=="uinput", SUBSYSTEM=="misc", MODE="0660", GROUP="input", OPTIONS+="static_node=uinput"

@@ -8,6 +8,42 @@ import os
 from pathlib import Path
 
 
+def _same_interpreter(a: Path, b: Path) -> bool:
+    try:
+        return os.path.samefile(a, b)
+    except OSError:
+        return os.path.realpath(a) == os.path.realpath(b)
+
+
+def _ensure_pyinstaller_importable() -> None:
+    """Garante PyInstaller importável; re-exec com o Python do venv se VIRTUAL_ENV estiver ativo mas outro binário estiver no comando."""
+    try:
+        import PyInstaller  # noqa: F401
+        return
+    except ImportError:
+        pass
+
+    venv = os.environ.get("VIRTUAL_ENV")
+    if venv:
+        here = Path(__file__).resolve()
+        this_exe = Path(sys.executable).resolve()
+        for name in ("python3", "python"):
+            candidate = (Path(venv) / "bin" / name).resolve()
+            if not candidate.is_file():
+                continue
+            if _same_interpreter(candidate, this_exe):
+                continue
+            os.execv(str(candidate), [str(candidate), str(here), *sys.argv[1:]])
+
+    print("❌ PyInstaller não está disponível neste interpretador.")
+    print(f"   sys.executable = {sys.executable}")
+    if venv:
+        print("   Com venv ativo, use: .venv/bin/python build.py (ou python3 build.py)")
+    else:
+        print("   Execute: pip install pyinstaller (no mesmo Python que roda este script)")
+    sys.exit(1)
+
+
 def build_exe():
     """Constrói o executável para Windows"""
     
@@ -39,9 +75,10 @@ def build_exe():
             cmd.insert(-1, f"--icon={str(icon_path.resolve())}")
     
     try:
-        result = subprocess.run(cmd, check=True, capture_output=True, text=True, cwd=project_dir)
+        subprocess.run(cmd, check=True, capture_output=True, text=True, cwd=project_dir)
         print("✅ Build concluído com sucesso!")
-        print(f"\nExecutável criado em: {project_dir / 'dist' / 'TempMailShortcut.exe'}")
+        exe_name = "TempMailShortcut.exe" if os.name == "nt" else "TempMailShortcut"
+        print(f"\nExecutável criado em: {project_dir / 'dist' / exe_name}")
         print("\nPróximos passos:")
         print("1. Teste o executável")
         print("2. Configure sua chave de API na primeira execução")
@@ -69,12 +106,5 @@ def build_exe():
 
 
 if __name__ == "__main__":
-    # Verifica se PyInstaller está instalado
-    try:
-        import PyInstaller
-    except ImportError:
-        print("❌ PyInstaller não está instalado.")
-        print("Execute: pip install pyinstaller")
-        sys.exit(1)
-    
+    _ensure_pyinstaller_importable()
     build_exe()

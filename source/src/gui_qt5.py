@@ -25,6 +25,10 @@ from .config_manager import ConfigManager
 from .data_generator import DataGenerator
 from .clipboard_manager import ClipboardManager
 from .shortcut_manager import ShortcutManager
+from .infrastructure.shortcuts.global_keyboard_shortcuts import (
+    LinuxGlobalHotkeyPermissionError,
+    LinuxGlobalHotkeyDumpkeysError,
+)
 
 
 # Cores do tema moderno (inspirado no GitHub)
@@ -956,9 +960,20 @@ class TempMailShortcutGUI(QMainWindow):
                     self.config_manager.set('hotkeys_enabled', True)
                 except Exception:
                     pass
+            except (LinuxGlobalHotkeyPermissionError, LinuxGlobalHotkeyDumpkeysError) as e:
+                self.hotkeys_checkbox.setChecked(False)
+                raw = str(e)
+                safe = raw.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                html = safe.replace("\n", "<br>")
+                title = (
+                    "dumpkeys / consola (Linux)"
+                    if isinstance(e, LinuxGlobalHotkeyDumpkeysError)
+                    else "Atalhos globais no Linux"
+                )
+                self._show_message(title, html, "warning")
             except Exception as e:
                 self.hotkeys_checkbox.setChecked(False)
-                self._show_message("Erro", f"Erro ao ativar: {str(e)[:50]}", "error")
+                self._show_message("Erro", f"Erro ao ativar: {str(e)[:400]}", "error")
         else:
             try:
                 self.shortcut_manager.stop_monitoring()
