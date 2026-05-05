@@ -112,24 +112,39 @@ class TempMailDataGenerator(IDataGenerator):
                 'error': 'RapidAPI key não configurada'
             }
         
+        # RapidAPI costuma exigir headers com estes nomes (case-insensitive na prática,
+        # mas mantemos o padrão para reduzir chance de erro).
         headers = {
-            "x-rapidapi-key": self.rapidapi_key,
-            "x-rapidapi-host": self.rapidapi_host
+            "X-RapidAPI-Key": self.rapidapi_key,
+            "X-RapidAPI-Host": self.rapidapi_host,
+            "Accept": "application/json",
         }
         
         try:
             url = "https://temp-mail.p.rapidapi.com/api/v3/email/new"
             response = requests.get(url, headers=headers, timeout=5)
             
+            # Alguns endpoints de "create" podem falhar com 404 quando o método está errado.
+            if response.status_code == 404:
+                response = requests.post(url, headers=headers, timeout=5)
+
             if response.status_code == 200:
                 data = response.json()
-                email = data.get('address', '')
+                # Dependendo da versão do endpoint, o campo pode vir como `email` ou `address`.
+                email = data.get('email') or data.get('address') or ''
+                if not email:
+                    return {
+                        'email': None,
+                        'error': "API retornou sucesso, mas não veio o campo de email"
+                    }
                 return {'email': email, 'error': None}
-            else:
-                return {
-                    'email': None,
-                    'error': f"API retornou status {response.status_code}"
-                }
+
+            # Inclui o body (truncado) para ajudar a identificar rapidamente o motivo do 404/400.
+            body_snippet = (response.text or "")[:500]
+            return {
+                'email': None,
+                'error': f"API retornou status {response.status_code}. Body: {body_snippet}"
+            }
         except requests.RequestException as e:
             return {
                 'email': None,
