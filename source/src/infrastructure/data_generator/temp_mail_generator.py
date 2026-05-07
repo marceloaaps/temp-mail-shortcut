@@ -118,6 +118,7 @@ class TempMailDataGenerator(IDataGenerator):
             "X-RapidAPI-Key": self.rapidapi_key,
             "X-RapidAPI-Host": self.rapidapi_host,
             "Accept": "application/json",
+            "User-Agent": "TempMailShortcut/1.0",
         }
         
         try:
@@ -139,11 +140,34 @@ class TempMailDataGenerator(IDataGenerator):
                     }
                 return {'email': email, 'error': None}
 
-            # Inclui o body (truncado) para ajudar a identificar rapidamente o motivo do 404/400.
+            # Tratamento mais detalhado para status não-200
+            status = response.status_code
             body_snippet = (response.text or "")[:500]
+            # Cabeçalhos úteis para diagnosticar rate limits
+            rl = {}
+            for h in ("Retry-After", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"):
+                if h in response.headers:
+                    rl[h] = response.headers.get(h)
+
+            if status == 429:
+                hint = "Too Many Requests (rate limit)."
+                if rl.get("Retry-After"):
+                    hint += f" Retry-After: {rl['Retry-After']}s."
+                hint += " Check RapidAPI quota or wait before retrying."
+                return {
+                    'email': None,
+                    'error': f"API retornou 429 (rate limit). Headers: {rl}. Body: {body_snippet}. {hint}"
+                }
+
+            if status in (401, 403):
+                return {
+                    'email': None,
+                    'error': f"Autenticação/permissão falhou (status {status}). Verifique a chave RapidAPI e o plano. Body: {body_snippet}"
+                }
+
             return {
                 'email': None,
-                'error': f"API retornou status {response.status_code}. Body: {body_snippet}"
+                'error': f"API retornou status {status}. Headers: {rl}. Body: {body_snippet}"
             }
         except requests.RequestException as e:
             return {
