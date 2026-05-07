@@ -95,7 +95,22 @@ class GlobalKeyboardShortcutService(IShortcutService):
         """Remove todos os atalhos registrados."""
         try:
             self.logger.debug(f"Unregistering all hotkeys: {self.registered_hotkeys}")
-            keyboard.clear_all_hotkeys()
+
+            # Compatibilidade: algumas versões do pacote `keyboard` falham no
+            # clear_all_hotkeys() por atributos internos ausentes (ex.: blocking_hotkeys).
+            # Primeiro removemos de forma explícita os atalhos que registramos.
+            for normalized, _callback in list(self.hotkey_callbacks):
+                try:
+                    keyboard.remove_hotkey(normalized)
+                except Exception:
+                    pass
+
+            # Tenta limpar atalhos remanescentes sem quebrar o fluxo.
+            try:
+                keyboard.clear_all_hotkeys()
+            except Exception as clear_err:
+                self.logger.debug(f"clear_all_hotkeys() ignorado por compatibilidade: {clear_err}")
+
             self.registered_hotkeys.clear()
             self.hotkey_callbacks.clear()
             self.monitoring = False

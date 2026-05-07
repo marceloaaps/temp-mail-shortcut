@@ -16,8 +16,8 @@ from PyQt5.QtWidgets import (
     QFrame, QScrollArea, QInputDialog, QMessageBox, QSizePolicy,
     QSystemTrayIcon, QMenu, QAction, QDialog
 )
-from PyQt5.QtCore import Qt, QSize, QTimer, pyqtSignal, QObject, QEvent
-from PyQt5.QtGui import QFont, QIcon, QPixmap, QCursor, QKeySequence
+from PyQt5.QtCore import Qt, QSize, QTimer, pyqtSignal, QObject, QEvent, QPoint, QRectF, QPropertyAnimation, QEasingCurve
+from PyQt5.QtGui import QFont, QIcon, QPixmap, QCursor, QKeySequence, QPainter, QColor, QPen, QPainterPath
 import logging
 import qtawesome as qta
 
@@ -350,12 +350,16 @@ class ToastNotification(QWidget):
     """Notificacao discreta na tela, nao clicavel, com auto fechamento."""
     def __init__(self, message: str, duration_ms: int = 5000, parent=None):
         super().__init__(parent)
+        self._duration_ms = duration_ms
+        self._target_pos = QPoint(0, 0)
+        self._slide_anim = None
         self.setWindowFlags(
             Qt.FramelessWindowHint | Qt.Tool | Qt.WindowStaysOnTopHint
         )
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WA_ShowWithoutActivating, True)
         self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self.setAutoFillBackground(False)
 
         layout = QHBoxLayout()
         layout.setContentsMargins(14, 10, 14, 10)
@@ -375,28 +379,63 @@ class ToastNotification(QWidget):
         layout.addWidget(text_label)
         self.setLayout(layout)
 
-        self.setStyleSheet(
-            f"QWidget {{"
-            f" background-color: {COLORS['card_bg']};"
-            f" border: 1px solid {COLORS['border']};"
-            f" border-left: 3px solid {COLORS['success']};"
-            f" border-radius: 10px;"
-            f" }}"
-        )
-
         self.adjustSize()
         self._position_on_screen()
-        QTimer.singleShot(duration_ms, self.close)
+
+    def paintEvent(self, event):
+        """Desenha fundo/borda manualmente para funcionar com janela translúcida."""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+
+        rect = self.rect().adjusted(0, 0, -1, -1)
+        rectf = QRectF(rect)
+        radius = 12
+
+        toast_path = QPainterPath()
+        toast_path.addRoundedRect(rectf, radius, radius)
+
+        # Clip para garantir que tudo seja desenhado estritamente dentro do toast arredondado.
+        painter.setClipPath(toast_path)
+
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor(COLORS['card_bg']))
+        painter.drawPath(toast_path)
+
+        accent_rect = rect.adjusted(1, 1, -(rect.width() - 4), -1)
+        painter.setBrush(QColor(COLORS['success']))
+        painter.drawRect(accent_rect)
+
+        painter.setClipping(False)
+        painter.setPen(QPen(QColor(COLORS['border']), 1))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawPath(toast_path)
+
+        super().paintEvent(event)
 
     def _position_on_screen(self):
         screen = QApplication.primaryScreen()
         if not screen:
             return
         rect = screen.availableGeometry()
-        margin = 16
-        x = rect.right() - self.width() - margin
-        y = rect.bottom() - self.height() - margin
-        self.move(x, y)
+        top_margin = 24
+        x = rect.x() + (rect.width() - self.width()) // 2
+        y = rect.y() + top_margin
+        self._target_pos = QPoint(x, y)
+        self.move(x, rect.y() - self.height() - 20)
+
+    def show_with_animation(self):
+        """Mostra o toast com slide do topo ate a posicao final."""
+        self.show()
+        self.raise_()
+
+        self._slide_anim = QPropertyAnimation(self, b"pos")
+        self._slide_anim.setDuration(360)
+        self._slide_anim.setStartValue(self.pos())
+        self._slide_anim.setEndValue(self._target_pos)
+        self._slide_anim.setEasingCurve(QEasingCurve.OutCubic)
+        self._slide_anim.start()
+
+        QTimer.singleShot(self._duration_ms, self.close)
 
 
 class TitleBar(QWidget):
@@ -1171,7 +1210,7 @@ class TempMailShortcutGUI(QMainWindow):
                 pass
 
         self._active_toast = ToastNotification(message, duration_ms=5000, parent=None)
-        self._active_toast.show()
+        self._active_toast.show_with_animation()
     
     def _show_message(self, title: str, message: str, msg_type: str = "info"):
         """Mostra mensagem no estilo da aplicação (não nativo do OS)."""
